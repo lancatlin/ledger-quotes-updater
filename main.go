@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"flag"
 	"io/ioutil"
 	"log"
@@ -15,10 +15,20 @@ import (
 )
 
 type Quote struct {
-	Data struct {
-		Price string `json:"05. price"`
-	} `json:"Global Quote"`
+	Spark struct {
+		Result []struct {
+			Response []struct {
+				Meta struct {
+					RegularMarketPrice float64 `json:regularMarketPrice`
+					Currency string `json:currency`
+					RegularMarketTime uint64 `json:regularMarketTime`
+				} `json:meta`
+			} `json:response`
+		} `json:result`
+	} `json:"spark"`
 }
+
+const API = "https://query1.finance.yahoo.com/v7/finance/spark?symbols=%s&range=1m"
 
 func main() {
 	apiToken := flag.String("a", "demo", "Alpha Vantage API Token")
@@ -58,7 +68,7 @@ func main() {
 }
 
 func GetPriceString(ticker string, apiToken string) (string, error) {
-	resp, err := http.Get("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=" + ticker + "&apikey=" + apiToken)
+	resp, err := http.Get(fmt.Sprintf(API, ticker))
 	if err != nil {
 		return "", err
 	}
@@ -75,10 +85,9 @@ func GetPriceString(ticker string, apiToken string) (string, error) {
 		return "", err
 	}
 
-	if f.Data.Price == "" {
-		return "", errors.New("Conversion Error")
-	}
-	return "$" + f.Data.Price, nil
+	log.Println(f)
+
+	return fmt.Sprintf("$%f", f.Spark.Result[0].Response[0].Meta.RegularMarketPrice), nil
 }
 
 func GetTimeString() string {
