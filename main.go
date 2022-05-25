@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -24,9 +25,10 @@ func main() {
 	ledgerBinary := flag.String("b", "ledger", "Ledger Binary")
 	ledgerFile := flag.String("f", "ledger.ledger", "Ledger File")
 	priceDbFile := flag.String("p", "prices.db", "Price Database File")
+	mappingFile := flag.String("m", "mapping", "Commodities Name Mapping File")
 	flag.Parse()
 
-	commodities := GetCommodities(*ledgerFile, *ledgerBinary)
+	commodities := GetCommodities(*ledgerFile, *ledgerBinary, *mappingFile)
 
 	pricedb, err := os.OpenFile(*priceDbFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -83,7 +85,7 @@ func GetTimeString() string {
 	return time.Now().Format("2006-01-02 15:04:05")
 }
 
-func GetCommodities(ledger string, binary string) []string {
+func GetCommodities(ledger string, binary string, mappingFile string) []string {
 	cmd := exec.Command(binary, "-f", ledger, "commodities")
 	out, err := cmd.Output()
 	if err != nil {
@@ -91,15 +93,38 @@ func GetCommodities(ledger string, binary string) []string {
 	}
 	a := strings.Split(string(out), "\n")
 	sliceOut := a[:len(a)-1]
+	mapping := GetMapping(mappingFile)
 
 	commodities := make([]string, 0)
 	for _, e := range sliceOut {
 		e = strings.Trim(e, `"`)
-		if IsTicker(e) {
-			commodities = append(commodities, e)
+		if value, ok := mapping[e]; ok {
+			e = value
+		}
+		commodities = append(commodities, e)
+	}
+	log.Println(commodities)
+	return commodities
+}
+
+func GetMapping(mappingFile string) map[string]string {
+	result := make(map[string]string)
+	file, err := os.Open(mappingFile)
+	if err != nil {
+		log.Fatalf("Open mapping file failed: %s\n", err)
+	}
+	defer file.Close()
+
+	fileScanner := bufio.NewScanner(file)
+
+	for fileScanner.Scan() {
+		arr := strings.Split(fileScanner.Text(), ":")
+		if len(arr) == 2 {
+			result[arr[0]] = strings.Trim(arr[1], "\n")
 		}
 	}
-	return commodities
+	log.Println(result)
+	return result
 }
 
 func IsTicker(s string) bool {
